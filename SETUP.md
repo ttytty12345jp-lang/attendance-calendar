@@ -3,7 +3,7 @@
 QさんはA児・B児、WさんはC児・D児……というように、**利用者ごとに独立した記録**を持ち、
 **PCからもスマホからも同じ記録**を使えるようにするための設定です。
 
-作業は大きく2つ。**① Supabase側の設定（5分・1回だけ）** と **② アプリの公開（10分・1回だけ）** です。
+アプリの公開は完了しています。残る作業は **Supabaseダッシュボードでの設定1つ（1分）** だけです。
 
 ---
 
@@ -16,7 +16,17 @@ QさんはA児・B児、WさんはC児・D児……というように、**利用
 このプロジェクトは出欠カレンダー専用です。時間割・お知らせ・行事などの他のアプリとは
 **完全に独立**していて、互いのデータには一切アクセスできません。
 
-### 1-1. ログイン用メールに6桁コードを載せる（推奨）
+### 1-0. 【必須】公開URLを登録する
+
+**Authentication → URL Configuration**
+（ https://supabase.com/dashboard/project/ohariyustdiitewlqsni/auth/url-configuration ）
+
+- **Site URL**: `https://ttytty12345jp-lang.github.io/attendance-calendar/`
+- **Redirect URLs** にも同じURLを追加
+
+ここが未設定だと、メール内のリンクを押してもログインできません。**この設定だけは必須**です。
+
+### 1-1. ログイン用メールに6桁コードを載せる（任意・推奨）
 
 **Authentication → Emails → Templates → Magic Link** を開き、本文に次の1行を足します。
 
@@ -27,16 +37,8 @@ QさんはA児・B児、WさんはC児・D児……というように、**利用
 これでメールに6桁の数字が入り、アプリの入力欄に打ち込めばログインできます。
 スマホでリンクを押すと別のブラウザで開いてしまう問題を避けられるため、この方法をおすすめします。
 
-### 1-2. リンクを押してログインする場合の設定
 
-**Authentication → URL Configuration** を開き、
-
-- **Site URL** に公開先のURL（例 `https://<ユーザー名>.github.io/attendance-calendar/`）
-- **Redirect URLs** にも同じURL
-
-を登録します。ここに登録されていないURLに戻ることはできません（未登録だとリンクが機能しません）。
-
-### 1-3. メール送信数の上限について
+### 1-2. メール送信数の上限について
 
 Supabaseに内蔵の無料メール送信は**1時間に数通**という厳しい制限があります。
 ログインは端末ごとに最初の1回だけなので通常は足りますが、
@@ -45,21 +47,14 @@ Supabaseに内蔵の無料メール送信は**1時間に数通**という厳し�
 
 ---
 
-## ② アプリの公開（GitHub Pages）
+## ② アプリの公開（GitHub Pages）── 完了済み
 
-スマホから使うにはURLで開ける必要があるため、静的サイトとして公開します。
+**公開URL: https://ttytty12345jp-lang.github.io/attendance-calendar/**
 
-```bash
-git init -b main
-git add .
-git commit -m "出欠カレンダー"
-gh repo create attendance-calendar --public --source=. --push
-```
+リポジトリ: https://github.com/ttytty12345jp-lang/attendance-calendar
 
-公開後、GitHubのリポジトリ **Settings → Pages → Source: Deploy from a branch → main / (root)** を選ぶと、
-数分で `https://<ユーザー名>.github.io/attendance-calendar/` が使えるようになります。
-
-そのURLを ①-2 のSite URL / Redirect URLsに登録すれば設定完了です。
+`main` ブランチに push すると、`.github/workflows/pages.yml` が自動的に再デプロイします。
+以後アプリを更新したいときは `git push` するだけです。
 
 ### 公開しても記録は見られません
 
