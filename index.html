@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>出欠カレンダー</title>
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#ffffff; --ink:#1b1f26; --sub:#68707d; --line:#e2e6ec;
+    --accent:#2f6fed; --late:#e08600; --late-bg:#fff3d9; --abs:#d93b3b; --abs-bg:#ffe4e4;
+    --ok:#3a9c67; --off:#eef0f4; --sat:#2f6fed; --sun:#d93b3b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171c; --panel:#1c2128; --ink:#e8eaed; --sub:#98a1ae; --line:#2c333d;
+      --accent:#6ea0ff; --late:#f0ad2e; --late-bg:#3b2f14; --abs:#ff6b6b; --abs-bg:#3d1f1f;
+      --ok:#5cc48a; --off:#232830; --sat:#6ea0ff; --sun:#ff6b6b;
+    }
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none !important}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:"Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+       font-size:14px;line-height:1.5}
+  .wrap{max-width:1040px;margin:0 auto;padding:18px 16px 60px}
+  h1{font-size:20px;margin:0 0 4px}
+  .lead{color:var(--sub);font-size:12.5px;margin:0 0 16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+  label.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--sub)}
+  input[type=date],input[type=text],input[type=email]{font:inherit;padding:6px 8px;border:1px solid var(--line);
+    border-radius:8px;background:var(--bg);color:var(--ink)}
+  input[type=text]{width:120px}
+  button{font:inherit;padding:6px 12px;border:1px solid var(--line);border-radius:8px;
+    background:var(--panel);color:var(--ink);cursor:pointer}
+  button:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+  button:disabled{opacity:.5;cursor:default}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+  button.primary:hover:not(:disabled){opacity:.88;color:#fff}
+  a{color:var(--accent)}
+
+  /* ログイン画面 */
+  .gate{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+  .gate .box{background:var(--panel);border:1px solid var(--line);border-radius:14px;
+             padding:26px 24px;max-width:400px;width:100%}
+  .gate h1{margin-bottom:6px}
+  .gate p{font-size:12.5px;color:var(--sub);margin:0 0 18px}
+  .gate .f2{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .gate input{width:100%}
+  .gate .msg{font-size:12.5px;margin-top:12px;min-height:1.2em}
+  .gate .msg.err{color:var(--abs)}
+  .gate .msg.ok{color:var(--ok)}
+  .gate .alt{font-size:12px;color:var(--sub);margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+  .linkish{background:none;border:none;color:var(--accent);padding:0;font-size:12px;text-decoration:underline;cursor:pointer}
+
+  /* ユーザーバー */
+  .userbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--sub);
+           margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .userbar .who{font-weight:600;color:var(--ink)}
+  .sync{display:inline-flex;align-items:center;gap:5px}
+  .sync::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--sub)}
+  .sync.ok::before{background:var(--ok)}
+  .sync.busy::before{background:var(--late)}
+  .sync.warn::before{background:var(--abs)}
+
+  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+  .kid h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .num{background:var(--bg);border-radius:10px;padding:10px 8px;text-align:center}
+  .num .v{font-size:22px;font-weight:700;letter-spacing:-.02em}
+  .num .l{font-size:11px;color:var(--sub);margin-top:2px}
+  .num .d{font-size:11px;color:var(--sub)}
+  .num.late .v{color:var(--late)}
+  .num.abs .v{color:var(--abs)}
+  .denom{font-size:12px;color:var(--sub);margin-top:10px}
+  .denom b{color:var(--ink);font-size:14px}
+
+  .calbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+  .calbar .ym{font-size:16px;font-weight:700;min-width:8em;text-align:center}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .dow{text-align:center;font-size:11px;color:var(--sub);padding:2px 0}
+  .dow:nth-child(1){color:var(--sun)}
+  .dow:nth-child(7){color:var(--sat)}
+  .cell{border:1px solid var(--line);border-radius:9px;min-height:80px;padding:4px 5px;background:var(--panel);
+        display:flex;flex-direction:column;gap:3px;position:relative}
+  .cell.blank{background:transparent;border:none;min-height:0}
+  .cell.nonbiz{background:var(--off)}
+  .cell.today{outline:2px solid var(--accent);outline-offset:-2px}
+  .cell.outrange{opacity:.45}
+  .dnum{font-size:12px;font-weight:700;display:flex;justify-content:space-between;align-items:center;gap:4px}
+  .cell.sun .dnum,.cell.hol .dnum{color:var(--sun)}
+  .cell.sat .dnum{color:var(--sat)}
+  .hname{font-size:9.5px;color:var(--sub);line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:12px}
+  .hname .ovtag{color:var(--accent);font-weight:700}
+  .offbtn{border:1px solid var(--line);background:var(--panel);color:var(--sub);font-size:10px;
+          padding:0 4px;border-radius:5px;cursor:pointer;line-height:1.5;
+          visibility:hidden}
+  .cell:hover .offbtn,.offbtn:focus-visible{visibility:visible}
+  .offbtn:hover{border-color:var(--accent);color:var(--accent)}
+  @media (hover:none){ .offbtn{visibility:visible;opacity:.5} }
+  .chips{margin-top:auto;display:flex;flex-direction:column;gap:3px}
+  .chip{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;
+        padding:1px 5px;font-size:11px;background:var(--bg);color:var(--ink);cursor:pointer;text-align:left}
+  .chip .nm{color:var(--sub);font-size:10px;max-width:4.2em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chip .st{margin-left:auto;font-weight:700;color:var(--sub)}
+  .chip.p .st{color:var(--ok)}
+  .chip.l{background:var(--late-bg);border-color:var(--late)}
+  .chip.l .st{color:var(--late)}
+  .chip.a{background:var(--abs-bg);border-color:var(--abs)}
+  .chip.a .st{color:var(--abs)}
+  .chip:hover:not(:disabled){border-color:var(--accent)}
+  .chip:disabled{opacity:.3;cursor:default}
+
+  .tblwrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;min-width:560px}
+  th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{color:var(--sub);font-weight:600;font-size:11.5px}
+  tfoot td{font-weight:700;border-top:2px solid var(--line)}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11.5px;color:var(--sub);margin-top:10px}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+  .tools{display:flex;gap:8px;flex-wrap:wrap}
+  .note{font-size:11.5px;color:var(--sub);margin-top:8px}
+  h2.sec{font-size:15px;margin:0 0 10px}
+</style>
+</head>
+<body>
+
+<!-- ================= ログイン画面 ================= -->
+<div class="gate" id="gate" hidden>
+  <div class="box">
+    <h1>出欠カレンダー</h1>
+    <p>ご自分のメールアドレスでログインすると、PC・スマホなど複数の端末で同じ記録を使えます。記録は本人以外からは見えません。</p>
+
+    <div id="stepEmail">
+      <div class="f2">
+        <label class="f" for="email">メールアドレス</label>
+        <input type="email" id="email" autocomplete="email" inputmode="email" placeholder="you@example.com">
+      </div>
+      <button class="primary" id="btnSend" style="width:100%">ログイン用のメールを送る</button>
+    </div>
+
+    <div id="stepCode" hidden>
+      <div class="f2">
+        <label class="f" for="code">メールに届いた6桁の数字</label>
+        <input type="text" id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="width:100%">
+      </div>
+      <button class="primary" id="btnVerify" style="width:100%">ログイン</button>
+      <p class="note" style="margin-top:10px">メール内のリンクを押してログインすることもできます。</p>
+      <button class="linkish" id="btnBack" style="margin-top:6px">メールアドレスを入れ直す</button>
+    </div>
+
+    <div class="msg" id="gateMsg"></div>
+
+    <div class="alt">
+      <button class="linkish" id="btnLocal">ログインせず、この端末だけで使う</button>
+      <div style="margin-top:6px">記録はこの端末のブラウザ内だけに保存され、他の端末とは同期されません。</div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 本体 ================= -->
+<div class="wrap" id="app" hidden>
+  <div class="userbar">
+    <span class="who" id="who"></span>
+    <span class="sync" id="syncState">—</span>
+    <span style="flex:1"></span>
+    <button id="btnLogout">ログアウト</button>
+  </div>
+
+  <h1>出欠カレンダー</h1>
+  <p class="lead">各日のセルで「出席 ○ → 遅刻 → 欠席 → 出席」とクリックで切り替えます。母数は集計開始日から基準日までの登校日数です。既定は平日（土日・祝日を除く）で、土曜授業や臨時休校などは日付ごとに登校日⇔休業日を切り替えられます。</p>
+
+  <div class="card">
+    <div class="row">
+      <label class="f">集計開始日<input type="date" id="startDate"></label>
+      <label class="f">基準日（この日まで集計）<input type="date" id="baseDate"></label>
+      <button id="btnToday">今日にする</button>
+      <label class="f">1人目の名前<input type="text" id="nameA"></label>
+      <label class="f">2人目の名前<input type="text" id="nameB"></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="card">
+    <div class="calbar">
+      <button id="prevM">◀</button>
+      <div class="ym" id="ym"></div>
+      <button id="nextM">▶</button>
+      <button id="toBase">基準月へ</button>
+      <span style="flex:1"></span>
+      <button id="btnOffRange">期間をまとめて設定</button>
+    </div>
+    <div class="grid" id="dow"></div>
+    <div class="grid" id="cal" style="margin-top:5px"></div>
+    <div class="legend">
+      <span><i style="background:var(--ok)"></i>出席</span>
+      <span><i style="background:var(--late)"></i>遅刻</span>
+      <span><i style="background:var(--abs)"></i>欠席</span>
+      <span><i style="background:var(--off)"></i>休業日（母数に含めない）</span>
+      <span>日付にカーソルを合わせると出る「休 / 登」、またはセルを右クリックで登校日⇔休業日を切替</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">月別の内訳</h2>
+    <div class="tblwrap"><table id="monthly"></table></div>
+    <p class="note">各月の登校日は基準日までで打ち切って数えます。</p>
+  </div>
+
+  <div class="card">
+    <div class="tools">
+      <button id="btnExport" class="primary">CSVで書き出し</button>
+      <button id="btnImport">CSVを読み込み</button>
+      <input type="file" id="fileIn" accept=".csv,text/csv" style="display:none">
+      <button id="btnClear">全データ消去</button>
+    </div>
+    <p class="note" id="storeNote"></p>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   接続先（公開してよい情報。実際のデータは Supabase 側の
+   Row Level Security でログイン者本人の行だけに限定される）
+   ========================================================= */
+var SUPABASE_URL = 'https://ohariyustdiitewlqsni.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_qcnIvh-O6iJus17hKl_Uzw_B7LtnUNq';
+
+/* 下のモジュールが読み込まれるまで／読み込めなかった場合の受け皿。
+   モジュールが動けば window.Cloud が本物に差し替わる。 */
+var Cloud = { user:null, q:[], queue:function(){}, wipe:function(){}, setState:function(){} };
+
+/* ---------- 状態 ---------- */
+var BASEKEY = 'attendance-calendar-v1';
+var storeKey = BASEKEY;           // ログイン後は利用者ごとに分ける
+var S = null;
+var viewYM = null;
+
+function defaults(){
+  var t = new Date();
+  var y = (t.getMonth() + 1) >= 4 ? t.getFullYear() : t.getFullYear() - 1; // 年度の開始年
+  return { names:{a:'A児', b:'B児'}, start: y + '-04-01', base: iso(t), rec:{}, ov:{} };
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(storeKey);
+    var d = defaults();
+    if(!raw) return d;
+    var o = JSON.parse(raw);
+    var ov = o.ov || {};
+    if(o.off){ Object.keys(o.off).forEach(function(k){ if(!ov[k]) ov[k] = 'off'; }); } // 旧形式からの移行
+    return {
+      names: { a: (o.names && o.names.a) || d.names.a, b: (o.names && o.names.b) || d.names.b },
+      start: o.start || d.start,
+      base: o.base || d.base,
+      rec: o.rec || {},
+      ov: ov
+    };
+  }catch(e){ return defaults(); }
+}
+function save(){ try{ localStorage.setItem(storeKey, JSON.stringify(S)); }catch(e){} }
+
+/* ---------- 日付 ---------- */
+function p2(n){ return String(n).padStart(2,'0'); }
+function iso(d){ return d.getFullYear() + '-' + p2(d.getMonth()+1) + '-' + p2(d.getDate()); }
+function parseD(s){ var a = s.split('-'); return new Date(+a[0], +a[1]-1, +a[2]); }
+function addDays(d,n){ var x = new Date(d); x.setDate(x.getDate()+n); return x; }
+function ymOf(s){ var d = parseD(s); return {y:d.getFullYear(), m:d.getMonth()+1}; }
+
+/* ---------- 祝日（国民の祝日に関する法律に基づく計算） ---------- */
+var holCache = {};
+function holidaysOf(y){
+  if(holCache[y]) return holCache[y];
+  var h = {};
+  function set(m,d,name){ h[y + '-' + p2(m) + '-' + p2(d)] = name; }
+  function nthMon(m,n){
+    var first = new Date(y, m-1, 1);
+    return 1 + ((1 - first.getDay() + 7) % 7) + (n-1)*7;
+  }
+  set(1,1,'元日');
+  set(1, nthMon(1,2), '成人の日');
+  set(2,11,'建国記念の日');
+  if(y >= 2020) set(2,23,'天皇誕生日');
+  set(3, Math.floor(20.8431 + 0.242194*(y-1980) - Math.floor((y-1980)/4)), '春分の日');
+  set(4,29, y >= 2007 ? '昭和の日' : 'みどりの日');
+  set(5,3,'憲法記念日');
+  if(y >= 2007) set(5,4,'みどりの日');
+  set(5,5,'こどもの日');
+  set(7, y >= 2003 ? nthMon(7,3) : 20, '海の日');
+  if(y >= 2016) set(8,11,'山の日');
+  set(9, nthMon(9,3), '敬老の日');
+  set(9, Math.floor(23.2488 + 0.242194*(y-1980) - Math.floor((y-1980)/4)), '秋分の日');
+  set(10, nthMon(10,2), y >= 2020 ? 'スポーツの日' : '体育の日');
+  set(11,3,'文化の日');
+  set(11,23,'勤労感謝の日');
+
+  // 振替休日：日曜と重なった祝日の後、最初の平日
+  Object.keys(h).sort().forEach(function(k){
+    if(parseD(k).getDay() !== 0) return;
+    var d = addDays(parseD(k), 1);
+    while(h[iso(d)]) d = addDays(d, 1);
+    h[iso(d)] = '振替休日';
+  });
+  // 国民の休日：祝日に挟まれた平日
+  Object.keys(h).sort().forEach(function(k){
+    var a = parseD(k), mid = addDays(a,1), b = addDays(a,2);
+    if(h[iso(b)] && !h[iso(mid)] && mid.getDay() !== 0 && mid.getDay() !== 6){
+      h[iso(mid)] = '国民の休日';
+    }
+  });
+  holCache[y] = h;
+  return h;
+}
+function holidayName(d){ return holidaysOf(d.getFullYear())[iso(d)] || null; }
+
+/* ---------- 登校日判定 ----------
+   既定：平日かつ祝日でない日が登校日。
+   S.ov[日付] = 'on'（登校日にする）/ 'off'（休業日にする）で個別に上書きできる。 */
+function isDefaultBiz(d){
+  var w = d.getDay();
+  return w !== 0 && w !== 6 && !holidayName(d);
+}
+function isBiz(d){
+  var v = S.ov[iso(d)];
+  if(v === 'on') return true;
+  if(v === 'off') return false;
+  return isDefaultBiz(d);
+}
+// 登校日⇔休業日をその日だけ反転。既定と同じ状態に戻る場合は上書きを削除する。
+function toggleDay(k){
+  var d = parseD(k), want = !isBiz(d);
+  setDay(k, want ? 'on' : 'off');
+}
+function setDay(k, mode){ // mode: 'on' | 'off' | 'reset'
+  if(mode !== 'reset' && (mode === 'on') !== isDefaultBiz(parseD(k))) S.ov[k] = mode;
+  else delete S.ov[k];
+  Cloud.queue({ t:'ov', day:k, mode:S.ov[k] || null });
+}
+
+/* ---------- 集計 ---------- */
+function tally(){
+  var st = parseD(S.start), bs = parseD(S.base);
+  var res = { biz:0, a:{late:0, abs:0}, b:{late:0, abs:0}, months:[] };
+  if(bs < st) return res;
+  var order = [], map = {};
+  for(var d = new Date(st); d <= bs; d = addDays(d,1)){
+    if(!isBiz(d)) continue;
+    var mk = d.getFullYear() + '-' + p2(d.getMonth()+1);
+    if(!map[mk]){ map[mk] = {key:mk, biz:0, a:{late:0,abs:0}, b:{late:0,abs:0}}; order.push(mk); }
+    var m = map[mk];
+    res.biz++; m.biz++;
+    var r = S.rec[iso(d)] || {};
+    ['a','b'].forEach(function(c){
+      if(r[c] === 'late'){ res[c].late++; m[c].late++; }
+      else if(r[c] === 'abs'){ res[c].abs++; m[c].abs++; }
+    });
+  }
+  res.months = order.map(function(k){ return map[k]; });
+  return res;
+}
+function pct(n,d){ return d ? (n/d*100).toFixed(1) + '%' : '—'; }
+function esc(s){ return String(s).replace(/[&<>"]/g, function(m){
+  return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]; }); }
+
+/* ---------- 描画 ---------- */
+function renderStats(t){
+  document.getElementById('stats').innerHTML = ['a','b'].map(function(c){
+    var k = t[c], tot = k.late + k.abs;
+    return '<div class="kid">' +
+      '<h2><span class="dot" style="background:' + (c === 'a' ? 'var(--accent)' : 'var(--ok)') + '"></span>' + esc(S.names[c]) + '</h2>' +
+      '<div class="nums">' +
+        '<div class="num late"><div class="v">' + pct(k.late, t.biz) + '</div><div class="l">遅刻率</div><div class="d">' + k.late + ' / ' + t.biz + ' 日</div></div>' +
+        '<div class="num abs"><div class="v">' + pct(k.abs, t.biz) + '</div><div class="l">欠席率</div><div class="d">' + k.abs + ' / ' + t.biz + ' 日</div></div>' +
+        '<div class="num"><div class="v">' + pct(tot, t.biz) + '</div><div class="l">遅刻＋欠席</div><div class="d">' + tot + ' / ' + t.biz + ' 日</div></div>' +
+      '</div>' +
+      '<div class="denom">出席日数 <b>' + (t.biz - k.abs) + '</b> 日（出席率 ' + pct(t.biz - k.abs, t.biz) + '）</div>' +
+    '</div>';
+  }).join('');
+}
+
+var DOW = ['日','月','火','水','木','金','土'];
+var LABEL = { late:'遅刻', abs:'欠席' };
+function renderDow(){
+  document.getElementById('dow').innerHTML = DOW.map(function(d){ return '<div class="dow">' + d + '</div>'; }).join('');
+}
+
+function renderCal(){
+  var y = viewYM.y, m = viewYM.m;
+  document.getElementById('ym').textContent = y + '年' + m + '月';
+  var first = new Date(y, m-1, 1), last = new Date(y, m, 0);
+  var st = parseD(S.start), bs = parseD(S.base), tdy = iso(new Date());
+  var html = '';
+  for(var i = 0; i < first.getDay(); i++) html += '<div class="cell blank"></div>';
+  for(var dd = 1; dd <= last.getDate(); dd++){
+    var d = new Date(y, m-1, dd), k = iso(d), w = d.getDay();
+    var hol = holidayName(d), ov = S.ov[k], biz = isBiz(d);
+    var inRange = d >= st && d <= bs;
+    var cls = ['cell'];
+    if(!biz) cls.push('nonbiz');
+    if(w === 0) cls.push('sun');
+    if(w === 6) cls.push('sat');
+    if(hol) cls.push('hol');
+    if(k === tdy) cls.push('today');
+    if(!inRange) cls.push('outrange');
+    var note = ov === 'on' ? '<span class="ovtag">登校日</span>'
+             : ov === 'off' ? '<span class="ovtag">休業日</span>'
+             : (hol ? esc(hol) : '');
+    var r = S.rec[k] || {};
+    var chips = ['a','b'].map(function(c){
+      var v = r[c];
+      var cc = v === 'late' ? 'l' : (v === 'abs' ? 'a' : 'p');
+      return '<button class="chip ' + cc + '" data-k="' + k + '" data-c="' + c + '"' + (biz ? '' : ' disabled') + '>' +
+        '<span class="nm">' + esc(S.names[c]) + '</span><span class="st">' + (v ? LABEL[v] : '○') + '</span></button>';
+    }).join('');
+    html += '<div class="' + cls.join(' ') + '" data-day="' + k + '">' +
+      '<div class="dnum"><span>' + dd + '</span>' +
+        '<button class="offbtn" data-off="' + k + '" title="' +
+          (biz ? 'この日を休業日にする' : 'この日を登校日にする') + '">' + (biz ? '休' : '登') + '</button></div>' +
+      '<div class="hname">' + note + '</div>' +
+      '<div class="chips">' + chips + '</div></div>';
+  }
+  document.getElementById('cal').innerHTML = html;
+}
+
+function renderMonthly(t){
+  var rows = t.months.map(function(m){
+    var a = m.key.split('-');
+    return '<tr><td>' + a[0] + '年' + Number(a[1]) + '月</td><td>' + m.biz + '</td>' +
+      '<td>' + m.a.late + '</td><td>' + m.a.abs + '</td><td>' + pct(m.a.late + m.a.abs, m.biz) + '</td>' +
+      '<td>' + m.b.late + '</td><td>' + m.b.abs + '</td><td>' + pct(m.b.late + m.b.abs, m.biz) + '</td></tr>';
+  }).join('');
+  document.getElementById('monthly').innerHTML =
+    '<thead><tr><th>月</th><th>登校日</th>' +
+      '<th>' + esc(S.names.a) + ' 遅刻</th><th>' + esc(S.names.a) + ' 欠席</th><th>' + esc(S.names.a) + ' 率</th>' +
+      '<th>' + esc(S.names.b) + ' 遅刻</th><th>' + esc(S.names.b) + ' 欠席</th><th>' + esc(S.names.b) + ' 率</th></tr></thead>' +
+    '<tbody>' + (rows || '<tr><td colspan="8" style="text-align:center;color:var(--sub)">対象期間がありません</td></tr>') + '</tbody>' +
+    '<tfoot><tr><td>合計</td><td>' + t.biz + '</td>' +
+      '<td>' + t.a.late + '</td><td>' + t.a.abs + '</td><td>' + pct(t.a.late + t.a.abs, t.biz) + '</td>' +
+      '<td>' + t.b.late + '</td><td>' + t.b.abs + '</td><td>' + pct(t.b.late + t.b.abs, t.biz) + '</td></tr></tfoot>';
+}
+
+function render(){
+  var t = tally();
+  renderStats(t); renderCal(); renderMonthly(t);
+  document.getElementById('startDate').value = S.start;
+  document.getElementById('baseDate').value = S.base;
+}
+
+/* ---------- 操作 ---------- */
+document.getElementById('cal').addEventListener('click', function(e){
+  var chip = e.target.closest('.chip');
+  if(chip){
+    var k = chip.dataset.k, c = chip.dataset.c;
+    var cur = (S.rec[k] || {})[c];
+    var nx = cur === undefined ? 'late' : (cur === 'late' ? 'abs' : null);
+    if(!S.rec[k]) S.rec[k] = {};
+    if(nx) S.rec[k][c] = nx; else delete S.rec[k][c];
+    if(!Object.keys(S.rec[k]).length) delete S.rec[k];
+    Cloud.queue({ t:'rec', day:k, child:c, status:nx });
+    save(); render();
+    return;
+  }
+  var ob = e.target.closest('.offbtn');
+  if(ob){
+    toggleDay(ob.dataset.off);
+    save(); render();
+  }
+});
+// 右クリックでも登校日⇔休業日を切替
+document.getElementById('cal').addEventListener('contextmenu', function(e){
+  var cell = e.target.closest('.cell[data-day]');
+  if(!cell) return;
+  e.preventDefault();
+  toggleDay(cell.dataset.day);
+  save(); render();
+});
+
+var elStart = document.getElementById('startDate');
+elStart.addEventListener('change', function(){
+  if(elStart.value){ S.start = elStart.value; Cloud.queue({t:'set'}); save(); render(); }
+});
+var elBase = document.getElementById('baseDate');
+elBase.addEventListener('change', function(){
+  if(elBase.value){ S.base = elBase.value; viewYM = ymOf(S.base); save(); render(); }
+});
+
+[['a','nameA','A児'], ['b','nameB','B児']].forEach(function(x){
+  var el = document.getElementById(x[1]);
+  el.addEventListener('input', function(){
+    S.names[x[0]] = el.value || x[2];
+    Cloud.queue({t:'set'});
+    save(); render();
+  });
+});
+
+document.getElementById('btnToday').onclick = function(){
+  S.base = iso(new Date());
+  viewYM = ymOf(S.base);
+  save(); render();
+};
+document.getElementById('prevM').onclick = function(){
+  viewYM.m--; if(viewYM.m < 1){ viewYM.m = 12; viewYM.y--; } renderCal();
+};
+document.getElementById('nextM').onclick = function(){
+  viewYM.m++; if(viewYM.m > 12){ viewYM.m = 1; viewYM.y++; } renderCal();
+};
+document.getElementById('toBase').onclick = function(){ viewYM = ymOf(S.base); renderCal(); };
+
+document.getElementById('btnOffRange').onclick = function(){
+  var from = prompt('期間の開始日（YYYY-MM-DD）', S.base);
+  if(!from) return;
+  var to = prompt('終了日（YYYY-MM-DD）', from);
+  if(!to) return;
+  var re = /^\d{4}-\d{2}-\d{2}$/;
+  if(!re.test(from) || !re.test(to)){ alert('日付は YYYY-MM-DD 形式で入力してください。'); return; }
+  var a = parseD(from), b = parseD(to);
+  if(b < a){ alert('終了日が開始日より前です。'); return; }
+  var m = prompt('この期間をどうしますか？\n1 ＝ 休業日にする\n2 ＝ 登校日にする\n3 ＝ 既定（平日は登校日／土日祝は休業日）に戻す', '1');
+  var mode = m === '1' ? 'off' : m === '2' ? 'on' : m === '3' ? 'reset' : null;
+  if(!mode) return;
+  for(var d = new Date(a); d <= b; d = addDays(d,1)) setDay(iso(d), mode);
+  save(); render();
+};
+
+/* ---------- CSV ---------- */
+document.getElementById('btnExport').onclick = function(){
+  var keys = Object.keys(S.rec).concat(Object.keys(S.ov)).filter(function(v,i,arr){ return arr.indexOf(v) === i; }).sort();
+  var lines = ['日付,区分,' + S.names.a + ',' + S.names.b];
+  keys.forEach(function(k){
+    var r = S.rec[k] || {};
+    var ov = S.ov[k] === 'off' ? '休業日' : (S.ov[k] === 'on' ? '登校日' : '');
+    lines.push([k, ov, LABEL[r.a] || '', LABEL[r.b] || ''].join(','));
+  });
+  var t = tally();
+  lines.push('');
+  lines.push('# 集計期間,' + S.start + ',〜,' + S.base);
+  lines.push('# 登校日数,' + t.biz);
+  lines.push('# ' + S.names.a + ',遅刻,' + t.a.late + ',' + pct(t.a.late, t.biz) + ',欠席,' + t.a.abs + ',' + pct(t.a.abs, t.biz));
+  lines.push('# ' + S.names.b + ',遅刻,' + t.b.late + ',' + pct(t.b.late, t.biz) + ',欠席,' + t.b.abs + ',' + pct(t.b.abs, t.biz));
+  var blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '出欠_' + S.start + '_' + S.base + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+document.getElementById('btnImport').onclick = function(){ document.getElementById('fileIn').click(); };
+document.getElementById('fileIn').onchange = function(ev){
+  var f = ev.target.files[0];
+  if(!f) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    var n = 0;
+    String(rd.result).replace(/^﻿/,'').split(/\r?\n/).forEach(function(line){
+      if(!line || line.charAt(0) === '#') return;
+      var col = line.split(',');
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(col[0])) return;
+      var k = col[0], kind = (col[1] || '').trim();
+      setDay(k, kind === '休業日' ? 'off' : (kind === '登校日' ? 'on' : 'reset'));
+      function conv(s){ s = (s || '').trim(); return s === '遅刻' ? 'late' : (s === '欠席' ? 'abs' : null); }
+      var a = conv(col[2]), b = conv(col[3]);
+      delete S.rec[k];
+      if(a || b){ S.rec[k] = {}; if(a) S.rec[k].a = a; if(b) S.rec[k].b = b; }
+      Cloud.queue({ t:'rec', day:k, child:'a', status:a });
+      Cloud.queue({ t:'rec', day:k, child:'b', status:b });
+      n++;
+    });
+    save(); render();
+    alert(n + ' 行を読み込みました。');
+  };
+  rd.readAsText(f);
+  ev.target.value = '';
+};
+document.getElementById('btnClear').onclick = function(){
+  if(!confirm('記録と登校日／休業日の設定をすべて消去します。よろしいですか？' +
+              (Cloud.user ? '\nクラウド上の記録も消え、他の端末からも消えます。' : ''))) return;
+  S.rec = {}; S.ov = {};
+  save(); render();
+  Cloud.wipe();
+};
+</script>
+
+<script type="module">
+/* =========================================================
+   クラウド同期（Supabase）
+   - ログインした人の記録だけを読み書きする（RLSで保証）
+   - 端末はローカル保存を先に更新し、あとから送信する
+     （電波が無くても入力でき、つながったら自動で送られる）
+   ========================================================= */
+var Cloud = {
+  sb: null, user: null, ready: false,
+  q: [],                 // 送信待ちの操作
+  qKey: 'attendance-queue-v1',
+  state: 'local',
+
+  queue: function(op){
+    if(!this.user) return;                       // ローカルのみモードでは送らない
+    this.q = this.q.filter(function(o){          // 同じ対象の古い操作は捨てる
+      if(o.t !== op.t) return true;
+      if(op.t === 'set') return false;
+      if(op.t === 'rec') return !(o.day === op.day && o.child === op.child);
+      return o.day !== op.day;
+    });
+    this.q.push(op);
+    this.saveQueue();
+    this.flush();
+  },
+  saveQueue: function(){ try{ localStorage.setItem(this.qKey, JSON.stringify(this.q)); }catch(e){} },
+  loadQueue: function(){
+    try{ this.q = JSON.parse(localStorage.getItem(this.qKey) || '[]'); }catch(e){ this.q = []; }
+  },
+
+  setState: function(s, extra){
+    this.state = s;
+    var el = document.getElementById('syncState');
+    if(!el) return;
+    var map = {
+      local: ['', 'この端末だけに保存'],
+      ok:    ['ok', '同期済み'],
+      busy:  ['busy', '同期中…'],
+      queued:['busy', '未送信 ' + this.q.length + ' 件'],
+      off:   ['warn', 'オフライン（未送信 ' + this.q.length + ' 件）'],
+      error: ['warn', extra || '同期エラー']
+    };
+    var v = map[s] || map.local;
+    el.className = 'sync ' + v[0];
+    el.textContent = v[1];
+  },
+
+  flushing: false,
+  flush: async function(){
+    if(!this.user || this.flushing || !this.q.length) return;
+    if(!navigator.onLine){ this.setState('off'); return; }
+    this.flushing = true;
+    this.setState('busy');
+    try{
+      while(this.q.length){
+        var op = this.q[0];
+        await this.send(op);
+        this.q.shift();
+        this.saveQueue();
+      }
+      this.setState('ok');
+    }catch(e){
+      this.setState(navigator.onLine ? 'error' : 'off', '送信できません（あとで自動再送）');
+    }finally{
+      this.flushing = false;
+    }
+  },
+
+  send: async function(op){
+    var uid = this.user.id, r;
+    if(op.t === 'set'){
+      r = await this.sb.from('attendance_settings').upsert({
+        user_id: uid, name_a: S.names.a, name_b: S.names.b, start_date: S.start, updated_at: new Date().toISOString()
+      });
+    }else if(op.t === 'rec'){
+      if(op.status){
+        r = await this.sb.from('attendance_records').upsert({
+          user_id: uid, day: op.day, child: op.child, status: op.status, updated_at: new Date().toISOString()
+        });
+      }else{
+        r = await this.sb.from('attendance_records').delete()
+              .eq('user_id', uid).eq('day', op.day).eq('child', op.child);
+      }
+    }else if(op.t === 'ov'){
+      if(op.mode){
+        r = await this.sb.from('attendance_day_overrides').upsert({
+          user_id: uid, day: op.day, mode: op.mode, updated_at: new Date().toISOString()
+        });
+      }else{
+        r = await this.sb.from('attendance_day_overrides').delete()
+              .eq('user_id', uid).eq('day', op.day);
+      }
+    }
+    if(r && r.error) throw r.error;
+  },
+
+  // クラウドの内容を取り込む（送信待ちの操作はそのあとに上書きし直す）
+  pull: async function(){
+    if(!this.user) return;
+    this.setState('busy');
+    var res = await Promise.all([
+      this.sb.from('attendance_settings').select('name_a,name_b,start_date').maybeSingle(),
+      this.sb.from('attendance_records').select('day,child,status'),
+      this.sb.from('attendance_day_overrides').select('day,mode')
+    ]);
+    var err = res.find(function(r){ return r.error; });
+    if(err){ this.setState('error'); throw err.error; }
+
+    var st = res[0].data;
+    if(st){
+      S.names.a = st.name_a; S.names.b = st.name_b; S.start = st.start_date;
+    }else{
+      await this.send({t:'set'});                // 初回ログイン：今の設定をクラウドへ
+    }
+    S.rec = {};
+    res[1].data.forEach(function(row){
+      if(!S.rec[row.day]) S.rec[row.day] = {};
+      S.rec[row.day][row.child] = row.status;
+    });
+    S.ov = {};
+    res[2].data.forEach(function(row){ S.ov[row.day] = row.mode; });
+
+    // 未送信ぶんを反映し直してから保存
+    this.q.forEach(function(op){
+      if(op.t === 'rec'){
+        if(op.status){ if(!S.rec[op.day]) S.rec[op.day] = {}; S.rec[op.day][op.child] = op.status; }
+        else if(S.rec[op.day]){ delete S.rec[op.day][op.child]; }
+      }else if(op.t === 'ov'){
+        if(op.mode) S.ov[op.day] = op.mode; else delete S.ov[op.day];
+      }
+    });
+    document.getElementById('nameA').value = S.names.a;
+    document.getElementById('nameB').value = S.names.b;
+    save(); render();
+    this.setState(this.q.length ? 'queued' : 'ok');
+    await this.flush();
+  },
+
+  // 全消去（クラウド側）
+  wipe: async function(){
+    if(!this.user) return;
+    this.q = []; this.saveQueue();
+    try{
+      await this.sb.from('attendance_records').delete().eq('user_id', this.user.id);
+      await this.sb.from('attendance_day_overrides').delete().eq('user_id', this.user.id);
+      this.setState('ok');
+    }catch(e){ this.setState('error'); }
+  }
+};
+window.Cloud = Cloud;
+
+/* ---------- 画面の切り替え ---------- */
+var gate = document.getElementById('gate');
+var app  = document.getElementById('app');
+var msg  = document.getElementById('gateMsg');
+
+function showGate(){ gate.hidden = false; app.hidden = true; }
+function showApp(){
+  gate.hidden = true; app.hidden = false;
+  document.getElementById('nameA').value = S.names.a;
+  document.getElementById('nameB').value = S.names.b;
+  viewYM = ymOf(S.base);
+  renderDow(); render();
+}
+function setMsg(text, kind){ msg.textContent = text || ''; msg.className = 'msg ' + (kind || ''); }
+
+function startLocalOnly(){
+  storeKey = BASEKEY;
+  S = load();
+  document.getElementById('who').textContent = 'ログインなし';
+  document.getElementById('btnLogout').textContent = 'ログイン画面へ';
+  document.getElementById('storeNote').textContent =
+    '記録はこの端末のブラウザ内だけに保存されています。他の端末とは同期されません。バックアップにはCSV書き出しをお使いください。';
+  Cloud.setState('local');
+  showApp();
+}
+
+function startSignedIn(user){
+  Cloud.user = user;
+  storeKey = BASEKEY + ':' + user.id;
+  S = load();
+  Cloud.loadQueue();
+  document.getElementById('who').textContent = user.email;
+  document.getElementById('btnLogout').textContent = 'ログアウト';
+  document.getElementById('storeNote').textContent =
+    '記録はクラウドに保存され、同じメールアドレスでログインすればどの端末からでも同じ記録を使えます。' +
+    '電波が無いときの入力は端末内にためておき、つながったときに自動で送信されます。';
+  showApp();
+  Cloud.pull().catch(function(){ Cloud.setState('error', '読み込めません（表示は端末内の記録）'); });
+}
+
+/* ---------- 起動 ---------- */
+(async function init(){
+  var createClient;
+  try{
+    var mod = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    createClient = mod.createClient;
+  }catch(e){
+    // ライブラリを取得できない（オフラインなど）→ 端末内だけで動かす
+    startLocalOnly();
+    Cloud.setState('error', 'クラウドに接続できません（この端末だけで動作中）');
+    return;
+  }
+
+  Cloud.sb = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+  });
+
+  var sess = await Cloud.sb.auth.getSession();
+  if(sess.data.session) startSignedIn(sess.data.session.user);
+  else showGate();
+
+  Cloud.sb.auth.onAuthStateChange(function(ev, session){
+    if(ev === 'SIGNED_IN' && session && (!Cloud.user || Cloud.user.id !== session.user.id)){
+      startSignedIn(session.user);
+    }
+    if(ev === 'SIGNED_OUT'){ Cloud.user = null; showGate(); }
+  });
+
+  /* ログイン操作 */
+  var email = document.getElementById('email'), code = document.getElementById('code');
+  var stepEmail = document.getElementById('stepEmail'), stepCode = document.getElementById('stepCode');
+  var btnSend = document.getElementById('btnSend'), btnVerify = document.getElementById('btnVerify');
+
+  btnSend.onclick = async function(){
+    var v = (email.value || '').trim();
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ setMsg('メールアドレスの形式を確認してください。', 'err'); return; }
+    btnSend.disabled = true; setMsg('送信中…');
+    var r = await Cloud.sb.auth.signInWithOtp({
+      email: v,
+      options: { shouldCreateUser:true, emailRedirectTo: location.href.split('#')[0].split('?')[0] }
+    });
+    btnSend.disabled = false;
+    if(r.error){ setMsg('送信できませんでした：' + r.error.message, 'err'); return; }
+    stepEmail.hidden = true; stepCode.hidden = false;
+    setMsg(v + ' にメールを送りました。届いた6桁の数字を入力するか、メール内のリンクを押してください。', 'ok');
+    code.focus();
+  };
+  btnVerify.onclick = async function(){
+    var v = (code.value || '').replace(/\D/g,'');
+    if(v.length !== 6){ setMsg('6桁の数字を入力してください。', 'err'); return; }
+    btnVerify.disabled = true; setMsg('確認中…');
+    var addr = (email.value || '').trim();
+    var r = await Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'email' });
+    if(r.error) r = await Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'signup' }); // 新規登録時のコード
+    btnVerify.disabled = false;
+    if(r.error){ setMsg('確認できませんでした：' + r.error.message, 'err'); return; }
+    setMsg('');
+  };
+  document.getElementById('btnBack').onclick = function(){
+    stepCode.hidden = true; stepEmail.hidden = false; setMsg('');
+  };
+  document.getElementById('btnLocal').onclick = function(){ setMsg(''); startLocalOnly(); };
+  code.addEventListener('keydown', function(e){ if(e.key === 'Enter') btnVerify.click(); });
+  email.addEventListener('keydown', function(e){ if(e.key === 'Enter') btnSend.click(); });
+
+  document.getElementById('btnLogout').onclick = async function(){
+    if(!Cloud.user){ showGate(); return; }        // ローカルのみモード → ログイン画面へ
+    if(Cloud.q.length && !confirm('未送信の記録が ' + Cloud.q.length + ' 件あります。ログアウトすると送信できなくなります。よろしいですか？')) return;
+    await Cloud.sb.auth.signOut();
+  };
+
+  /* 再接続・復帰したら送信と再取得 */
+  window.addEventListener('online', function(){ Cloud.flush(); });
+  window.addEventListener('offline', function(){ if(Cloud.user) Cloud.setState('off'); });
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && Cloud.user) Cloud.pull().catch(function(){});
+  });
+})();
+</script>
+</body>
+</html>
