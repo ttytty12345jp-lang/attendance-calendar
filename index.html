@@ -682,17 +682,34 @@ var Cloud = {
   },
 
   // クラウドの内容を取り込む（送信待ちの操作はそのあとに上書きし直す）
+  pulling: false,
   pull: async function(){
-    if(!this.user) return;
-    this.setState('busy');
-    var res = await Promise.all([
-      this.sb.from('attendance_settings').select('name_a,name_b,start_date').maybeSingle(),
-      this.sb.from('attendance_records').select('day,child,status'),
-      this.sb.from('attendance_day_overrides').select('day,mode')
-    ]);
-    var err = res.find(function(r){ return r.error; });
-    if(err){ this.setState('error'); throw err.error; }
+    if(!this.user || this.pulling) return;   // 同時に何本も走らせない
+    this.pulling = true;
+    try{
+      var res, err;
+      // ログイン直後はトークンの反映が一瞬遅れて弾かれることがあるため、
+      // セッションを確かめたうえで読み、失敗しても数回まで待って再試行する。
+      for(var attempt = 1; attempt <= 4; attempt++){
+        this.setState('busy');
+        await this.sb.auth.getSession();
+        res = await Promise.all([
+          this.sb.from('attendance_settings').select('name_a,name_b,start_date').maybeSingle(),
+          this.sb.from('attendance_records').select('day,child,status'),
+          this.sb.from('attendance_day_overrides').select('day,mode')
+        ]);
+        err = res.find(function(r){ return r.error; });
+        if(!err) break;
+        if(attempt === 4){ this.setState('error', '読み込めません（ここを押すと再試行）'); throw err.error; }
+        await new Promise(function(r){ setTimeout(r, 500 * attempt); });
+      }
+      await this.apply(res);
+    }finally{
+      this.pulling = false;
+    }
+  },
 
+  apply: async function(res){
     var st = res[0].data;
     if(st){
       S.names.a = st.name_a; S.names.b = st.name_b; S.start = st.start_date;
@@ -846,6 +863,12 @@ function startSignedIn(user){
     if(Cloud.q.length && !confirm('未送信の記録が ' + Cloud.q.length + ' 件あります。ログアウトすると送信できなくなります。よろしいですか？')) return;
     await Cloud.sb.auth.signOut();
   };
+
+  /* 同期表示を押したら、その場で再取得（うまくいかないときの手動リトライ） */
+  var syncEl = document.getElementById('syncState');
+  syncEl.style.cursor = 'pointer';
+  syncEl.title = '押すと再読み込みします';
+  syncEl.onclick = function(){ if(Cloud.user) Cloud.pull().catch(function(){}); };
 
   /* 再接続・復帰したら送信と再取得 */
   window.addEventListener('online', function(){ Cloud.flush(); });
