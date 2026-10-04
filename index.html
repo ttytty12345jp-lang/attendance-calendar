@@ -794,6 +794,26 @@ function startSignedIn(user){
 }
 
 /* ---------- 起動 ---------- */
+function withTimeout(p, ms){
+  return Promise.race([p, new Promise(function(_, rej){
+    setTimeout(function(){ rej(new Error('timeout')); }, ms);
+  })]);
+}
+// サーバーに問い合わせず、この端末に残っている前回ログインの利用者を取り出す
+function cachedUser(){
+  try{
+    var ref = new URL(SUPABASE_URL).hostname.split('.')[0];
+    var o = JSON.parse(localStorage.getItem('sb-' + ref + '-auth-token') || 'null');
+    return o && o.user ? o.user : null;
+  }catch(e){ return null; }
+}
+function isNetworkError(err){
+  var m = String(err && (err.message || err)).toLowerCase();
+  return m.indexOf('fetch') >= 0 || m.indexOf('network') >= 0 || m.indexOf('timeout') >= 0;
+}
+var DOWN_MSG = 'サーバーに接続できません。データベースが一時停止している可能性があります。' +
+               'しばらく待ってから再度お試しください。';
+
 (async function init(){
   var createClient;
   try{
@@ -810,9 +830,24 @@ function startSignedIn(user){
     auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
   });
 
-  var sess = await Cloud.sb.auth.getSession();
-  if(sess.data.session) startSignedIn(sess.data.session.user);
-  else showGate();
+  // 前回のログインが期限切れだと、ここでサーバーに更新を問い合わせる。
+  // サーバーが止まっていても画面が真っ白にならないよう、時間制限を付けて失敗に備える。
+  try{
+    var sess = await withTimeout(Cloud.sb.auth.getSession(), 6000);
+    if(sess.data.session) startSignedIn(sess.data.session.user);
+    else if(sess.error && isNetworkError(sess.error)) throw sess.error;   // 通信失敗は下で扱う
+    else showGate();
+  }catch(e){
+    var cu = cachedUser();
+    if(cu){
+      // 端末内の記録で開いておき、入力は送信待ちにためる（つながれば自動送信）
+      startSignedIn(cu);
+      Cloud.setState('error', 'サーバーに接続できません（端末内の記録を表示中）');
+    }else{
+      showGate();
+      setMsg(DOWN_MSG, 'err');
+    }
+  }
 
   Cloud.sb.auth.onAuthStateChange(function(ev, session){
     if(ev === 'SIGNED_IN' && session && (!Cloud.user || Cloud.user.id !== session.user.id)){
@@ -830,12 +865,18 @@ function startSignedIn(user){
     var v = (email.value || '').trim();
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)){ setMsg('メールアドレスの形式を確認してください。', 'err'); return; }
     btnSend.disabled = true; setMsg('送信中…');
-    var r = await Cloud.sb.auth.signInWithOtp({
-      email: v,
-      options: { shouldCreateUser:true, emailRedirectTo: location.href.split('#')[0].split('?')[0] }
-    });
+    var r;
+    try{
+      r = await withTimeout(Cloud.sb.auth.signInWithOtp({
+        email: v,
+        options: { shouldCreateUser:true, emailRedirectTo: location.href.split('#')[0].split('?')[0] }
+      }), 15000);
+    }catch(e){ r = { error: e }; }
     btnSend.disabled = false;
-    if(r.error){ setMsg('送信できませんでした：' + r.error.message, 'err'); return; }
+    if(r.error){
+      setMsg(isNetworkError(r.error) ? DOWN_MSG : '送信できませんでした：' + r.error.message, 'err');
+      return;
+    }
     stepEmail.hidden = true; stepCode.hidden = false;
     setMsg(v + ' にメールを送りました。届いた6桁の数字を入力するか、メール内のリンクを押してください。', 'ok');
     code.focus();
@@ -844,11 +885,18 @@ function startSignedIn(user){
     var v = (code.value || '').replace(/\D/g,'');
     if(v.length !== 6){ setMsg('6桁の数字を入力してください。', 'err'); return; }
     btnVerify.disabled = true; setMsg('確認中…');
-    var addr = (email.value || '').trim();
-    var r = await Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'email' });
-    if(r.error) r = await Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'signup' }); // 新規登録時のコード
+    var addr = (email.value || '').trim(), r;
+    try{
+      r = await withTimeout(Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'email' }), 15000);
+      if(r.error && !isNetworkError(r.error)){
+        r = await withTimeout(Cloud.sb.auth.verifyOtp({ email:addr, token:v, type:'signup' }), 15000); // 新規登録時のコード
+      }
+    }catch(e){ r = { error: e }; }
     btnVerify.disabled = false;
-    if(r.error){ setMsg('確認できませんでした：' + r.error.message, 'err'); return; }
+    if(r.error){
+      setMsg(isNetworkError(r.error) ? DOWN_MSG : '確認できませんでした：' + r.error.message, 'err');
+      return;
+    }
     setMsg('');
   };
   document.getElementById('btnBack').onclick = function(){

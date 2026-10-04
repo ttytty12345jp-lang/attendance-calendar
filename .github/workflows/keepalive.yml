@@ -1,0 +1,26 @@
+name: Keep database awake
+
+# Supabase の無料プランは 1 週間アクセスがないとプロジェクトを自動停止する。
+# 夏休みなど記録しない期間も止まらないよう、3 日ごとに軽い読み取りを 1 回行う。
+# （未ログイン扱いのため RLS により 0 件が返るだけで、データには一切触れない）
+
+on:
+  schedule:
+    - cron: '0 0 */3 * *'   # 3 日ごと 9:00 JST
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        env:
+          URL: https://ohariyustdiitewlqsni.supabase.co
+          KEY: sb_publishable_qcnIvh-O6iJus17hKl_Uzw_B7LtnUNq   # index.html と同じ公開用キー
+        run: |
+          # -f: HTTP エラーなら失敗扱い → GitHub から失敗通知メールが届く（停止の早期発見）
+          curl -fsS --retry 3 --retry-delay 20 \
+            "$URL/rest/v1/attendance_settings?select=user_id&limit=1" \
+            -H "apikey: $KEY" -H "Authorization: Bearer $KEY"
+          echo
+          echo "ok: $(date -u +%FT%TZ)"
