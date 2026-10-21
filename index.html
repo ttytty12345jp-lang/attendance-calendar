@@ -790,7 +790,7 @@ function showApp(){
   gate.hidden = true; app.hidden = false;
   document.getElementById('nameA').value = S.names.a;
   document.getElementById('nameB').value = S.names.b;
-  viewYM = ymOf(S.base);
+  viewYM = ymOf(iso(new Date()));   // 開いたときは常に今月を表示
   renderDow(); render();
 }
 function setMsg(text, kind){ msg.textContent = text || ''; msg.className = 'msg ' + (kind || ''); }
