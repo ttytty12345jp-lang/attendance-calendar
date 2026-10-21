@@ -8,12 +8,14 @@
   :root{
     --bg:#f6f7f9; --panel:#ffffff; --ink:#1b1f26; --sub:#68707d; --line:#e2e6ec;
     --accent:#2f6fed; --late:#e08600; --late-bg:#fff3d9; --abs:#d93b3b; --abs-bg:#ffe4e4;
+    --vlate:#b8480f; --vlate-bg:#ffe6d2;
     --ok:#3a9c67; --off:#eef0f4; --sat:#2f6fed; --sun:#d93b3b;
   }
   @media (prefers-color-scheme: dark){
     :root{
       --bg:#14171c; --panel:#1c2128; --ink:#e8eaed; --sub:#98a1ae; --line:#2c333d;
       --accent:#6ea0ff; --late:#f0ad2e; --late-bg:#3b2f14; --abs:#ff6b6b; --abs-bg:#3d1f1f;
+      --vlate:#ff8a3d; --vlate-bg:#3e2416;
       --ok:#5cc48a; --off:#232830; --sat:#6ea0ff; --sun:#ff6b6b;
     }
   }
@@ -66,19 +68,21 @@
   .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
   .kid h2{font-size:15px;margin:0 0 10px;display:flex;align-items:center;gap:8px}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-  .nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  @media (max-width:440px){ .nums{grid-template-columns:repeat(2,1fr)} }
   .num{background:var(--bg);border-radius:10px;padding:10px 8px;text-align:center}
   .num .v{font-size:22px;font-weight:700;letter-spacing:-.02em}
   .num .l{font-size:11px;color:var(--sub);margin-top:2px}
   .num .d{font-size:11px;color:var(--sub)}
   .num.late .v{color:var(--late)}
+  .num.vlate .v{color:var(--vlate)}
   .num.abs .v{color:var(--abs)}
   .denom{font-size:12px;color:var(--sub);margin-top:10px}
   .denom b{color:var(--ink);font-size:14px}
 
   .calbar{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
   .calbar .ym{font-size:16px;font-weight:700;min-width:8em;text-align:center}
-  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
   .dow{text-align:center;font-size:11px;color:var(--sub);padding:2px 0}
   .dow:nth-child(1){color:var(--sun)}
   .dow:nth-child(7){color:var(--sat)}
@@ -103,10 +107,19 @@
   .chip{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:6px;
         padding:1px 5px;font-size:11px;background:var(--bg);color:var(--ink);cursor:pointer;text-align:left}
   .chip .nm{color:var(--sub);font-size:10px;max-width:4.2em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .chip .st{margin-left:auto;font-weight:700;color:var(--sub)}
+  .chip .st{margin-left:auto;font-weight:700;color:var(--sub);white-space:nowrap}
+  /* 狭い画面では短い表記（名前は頭文字、状態は 遅／大遅／欠）にする */
+  .chip .sh{display:none}
+  @media (max-width:520px){
+    .chip{padding:1px 3px;gap:2px}
+    .chip .fu{display:none}
+    .chip .sh{display:inline}
+  }
   .chip.p .st{color:var(--ok)}
   .chip.l{background:var(--late-bg);border-color:var(--late)}
   .chip.l .st{color:var(--late)}
+  .chip.v{background:var(--vlate-bg);border-color:var(--vlate)}
+  .chip.v .st{color:var(--vlate)}
   .chip.a{background:var(--abs-bg);border-color:var(--abs)}
   .chip.a .st{color:var(--abs)}
   .chip:hover:not(:disabled){border-color:var(--accent)}
@@ -170,7 +183,7 @@
   </div>
 
   <h1>出欠カレンダー</h1>
-  <p class="lead">各日のセルで「出席 ○ → 遅刻 → 欠席 → 出席」とクリックで切り替えます。母数は集計開始日から基準日までの登校日数です。既定は平日（土日・祝日を除く）で、土曜授業や臨時休校などは日付ごとに登校日⇔休業日を切り替えられます。</p>
+  <p class="lead">各日のセルで「出席 ○ → 遅刻 → 大遅刻 → 欠席 → 出席」とクリックで切り替えます。母数は集計開始日から基準日までの登校日数です。既定は平日（土日・祝日を除く）で、土曜授業や臨時休校などは日付ごとに登校日⇔休業日を切り替えられます。</p>
 
   <div class="card">
     <div class="row">
@@ -200,6 +213,7 @@
     <div class="legend">
       <span><i style="background:var(--ok)"></i>出席</span>
       <span><i style="background:var(--late)"></i>遅刻</span>
+      <span><i style="background:var(--vlate)"></i>大遅刻</span>
       <span><i style="background:var(--abs)"></i>欠席</span>
       <span><i style="background:var(--off)"></i>休業日（母数に含めない）</span>
       <span>日付にカーソルを合わせると出る「休 / 登」、またはセルを右クリックで登校日⇔休業日を切替</span>
@@ -345,19 +359,19 @@ function setDay(k, mode){ // mode: 'on' | 'off' | 'reset'
 /* ---------- 集計 ---------- */
 function tally(){
   var st = parseD(S.start), bs = parseD(S.base);
-  var res = { biz:0, a:{late:0, abs:0}, b:{late:0, abs:0}, months:[] };
+  var res = { biz:0, a:{late:0, vlate:0, abs:0}, b:{late:0, vlate:0, abs:0}, months:[] };
   if(bs < st) return res;
   var order = [], map = {};
   for(var d = new Date(st); d <= bs; d = addDays(d,1)){
     if(!isBiz(d)) continue;
     var mk = d.getFullYear() + '-' + p2(d.getMonth()+1);
-    if(!map[mk]){ map[mk] = {key:mk, biz:0, a:{late:0,abs:0}, b:{late:0,abs:0}}; order.push(mk); }
+    if(!map[mk]){ map[mk] = {key:mk, biz:0, a:{late:0,vlate:0,abs:0}, b:{late:0,vlate:0,abs:0}}; order.push(mk); }
     var m = map[mk];
     res.biz++; m.biz++;
     var r = S.rec[iso(d)] || {};
     ['a','b'].forEach(function(c){
-      if(r[c] === 'late'){ res[c].late++; m[c].late++; }
-      else if(r[c] === 'abs'){ res[c].abs++; m[c].abs++; }
+      var s = r[c];
+      if(s === 'late' || s === 'vlate' || s === 'abs'){ res[c][s]++; m[c][s]++; }
     });
   }
   res.months = order.map(function(k){ return map[k]; });
@@ -370,13 +384,14 @@ function esc(s){ return String(s).replace(/[&<>"]/g, function(m){
 /* ---------- 描画 ---------- */
 function renderStats(t){
   document.getElementById('stats').innerHTML = ['a','b'].map(function(c){
-    var k = t[c], tot = k.late + k.abs;
+    var k = t[c], tot = k.late + k.vlate + k.abs;
     return '<div class="kid">' +
       '<h2><span class="dot" style="background:' + (c === 'a' ? 'var(--accent)' : 'var(--ok)') + '"></span>' + esc(S.names[c]) + '</h2>' +
       '<div class="nums">' +
         '<div class="num late"><div class="v">' + pct(k.late, t.biz) + '</div><div class="l">遅刻率</div><div class="d">' + k.late + ' / ' + t.biz + ' 日</div></div>' +
+        '<div class="num vlate"><div class="v">' + pct(k.vlate, t.biz) + '</div><div class="l">大遅刻率</div><div class="d">' + k.vlate + ' / ' + t.biz + ' 日</div></div>' +
         '<div class="num abs"><div class="v">' + pct(k.abs, t.biz) + '</div><div class="l">欠席率</div><div class="d">' + k.abs + ' / ' + t.biz + ' 日</div></div>' +
-        '<div class="num"><div class="v">' + pct(tot, t.biz) + '</div><div class="l">遅刻＋欠席</div><div class="d">' + tot + ' / ' + t.biz + ' 日</div></div>' +
+        '<div class="num"><div class="v">' + pct(tot, t.biz) + '</div><div class="l">合計</div><div class="d">' + tot + ' / ' + t.biz + ' 日</div></div>' +
       '</div>' +
       '<div class="denom">出席日数 <b>' + (t.biz - k.abs) + '</b> 日（出席率 ' + pct(t.biz - k.abs, t.biz) + '）</div>' +
     '</div>';
@@ -384,7 +399,10 @@ function renderStats(t){
 }
 
 var DOW = ['日','月','火','水','木','金','土'];
-var LABEL = { late:'遅刻', abs:'欠席' };
+var LABEL = { late:'遅刻', vlate:'大遅刻', abs:'欠席' };
+var NEXT  = { '':'late', late:'vlate', vlate:'abs', abs:'' };   // クリックごとの切替順
+var CHIP  = { late:'l', vlate:'v', abs:'a' };
+var SHORT = { late:'遅', vlate:'大遅', abs:'欠' };              // 狭い画面用
 function renderDow(){
   document.getElementById('dow').innerHTML = DOW.map(function(d){ return '<div class="dow">' + d + '</div>'; }).join('');
 }
@@ -413,9 +431,10 @@ function renderCal(){
     var r = S.rec[k] || {};
     var chips = ['a','b'].map(function(c){
       var v = r[c];
-      var cc = v === 'late' ? 'l' : (v === 'abs' ? 'a' : 'p');
+      var cc = CHIP[v] || 'p';
       return '<button class="chip ' + cc + '" data-k="' + k + '" data-c="' + c + '"' + (biz ? '' : ' disabled') + '>' +
-        '<span class="nm">' + esc(S.names[c]) + '</span><span class="st">' + (v ? LABEL[v] : '○') + '</span></button>';
+        '<span class="nm"><span class="fu">' + esc(S.names[c]) + '</span><span class="sh">' + esc(Array.from(S.names[c])[0] || '') + '</span></span>' +
+        '<span class="st"><span class="fu">' + (v ? LABEL[v] : '○') + '</span><span class="sh">' + (v ? SHORT[v] : '○') + '</span></span></button>';
     }).join('');
     html += '<div class="' + cls.join(' ') + '" data-day="' + k + '">' +
       '<div class="dnum"><span>' + dd + '</span>' +
@@ -428,20 +447,24 @@ function renderCal(){
 }
 
 function renderMonthly(t){
+  // 1児ぶんの列：遅刻・大遅刻・欠席・率（3つの合計 ÷ 登校日）
+  function cols(k, biz){
+    return '<td>' + k.late + '</td><td>' + k.vlate + '</td><td>' + k.abs + '</td>' +
+           '<td>' + pct(k.late + k.vlate + k.abs, biz) + '</td>';
+  }
+  function heads(name){
+    name = esc(name);
+    return '<th>' + name + ' 遅刻</th><th>' + name + ' 大遅刻</th><th>' + name + ' 欠席</th><th>' + name + ' 率</th>';
+  }
   var rows = t.months.map(function(m){
     var a = m.key.split('-');
     return '<tr><td>' + a[0] + '年' + Number(a[1]) + '月</td><td>' + m.biz + '</td>' +
-      '<td>' + m.a.late + '</td><td>' + m.a.abs + '</td><td>' + pct(m.a.late + m.a.abs, m.biz) + '</td>' +
-      '<td>' + m.b.late + '</td><td>' + m.b.abs + '</td><td>' + pct(m.b.late + m.b.abs, m.biz) + '</td></tr>';
+      cols(m.a, m.biz) + cols(m.b, m.biz) + '</tr>';
   }).join('');
   document.getElementById('monthly').innerHTML =
-    '<thead><tr><th>月</th><th>登校日</th>' +
-      '<th>' + esc(S.names.a) + ' 遅刻</th><th>' + esc(S.names.a) + ' 欠席</th><th>' + esc(S.names.a) + ' 率</th>' +
-      '<th>' + esc(S.names.b) + ' 遅刻</th><th>' + esc(S.names.b) + ' 欠席</th><th>' + esc(S.names.b) + ' 率</th></tr></thead>' +
-    '<tbody>' + (rows || '<tr><td colspan="8" style="text-align:center;color:var(--sub)">対象期間がありません</td></tr>') + '</tbody>' +
-    '<tfoot><tr><td>合計</td><td>' + t.biz + '</td>' +
-      '<td>' + t.a.late + '</td><td>' + t.a.abs + '</td><td>' + pct(t.a.late + t.a.abs, t.biz) + '</td>' +
-      '<td>' + t.b.late + '</td><td>' + t.b.abs + '</td><td>' + pct(t.b.late + t.b.abs, t.biz) + '</td></tr></tfoot>';
+    '<thead><tr><th>月</th><th>登校日</th>' + heads(S.names.a) + heads(S.names.b) + '</tr></thead>' +
+    '<tbody>' + (rows || '<tr><td colspan="10" style="text-align:center;color:var(--sub)">対象期間がありません</td></tr>') + '</tbody>' +
+    '<tfoot><tr><td>合計</td><td>' + t.biz + '</td>' + cols(t.a, t.biz) + cols(t.b, t.biz) + '</tr></tfoot>';
 }
 
 function render(){
@@ -457,7 +480,7 @@ document.getElementById('cal').addEventListener('click', function(e){
   if(chip){
     var k = chip.dataset.k, c = chip.dataset.c;
     var cur = (S.rec[k] || {})[c];
-    var nx = cur === undefined ? 'late' : (cur === 'late' ? 'abs' : null);
+    var nx = NEXT[cur || ''] || null;
     if(!S.rec[k]) S.rec[k] = {};
     if(nx) S.rec[k][c] = nx; else delete S.rec[k][c];
     if(!Object.keys(S.rec[k]).length) delete S.rec[k];
@@ -540,8 +563,12 @@ document.getElementById('btnExport').onclick = function(){
   lines.push('');
   lines.push('# 集計期間,' + S.start + ',〜,' + S.base);
   lines.push('# 登校日数,' + t.biz);
-  lines.push('# ' + S.names.a + ',遅刻,' + t.a.late + ',' + pct(t.a.late, t.biz) + ',欠席,' + t.a.abs + ',' + pct(t.a.abs, t.biz));
-  lines.push('# ' + S.names.b + ',遅刻,' + t.b.late + ',' + pct(t.b.late, t.biz) + ',欠席,' + t.b.abs + ',' + pct(t.b.abs, t.biz));
+  ['a','b'].forEach(function(c){
+    var k = t[c];
+    lines.push('# ' + S.names[c] + ',遅刻,' + k.late + ',' + pct(k.late, t.biz) +
+               ',大遅刻,' + k.vlate + ',' + pct(k.vlate, t.biz) +
+               ',欠席,' + k.abs + ',' + pct(k.abs, t.biz));
+  });
   var blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -562,7 +589,7 @@ document.getElementById('fileIn').onchange = function(ev){
       if(!/^\d{4}-\d{2}-\d{2}$/.test(col[0])) return;
       var k = col[0], kind = (col[1] || '').trim();
       setDay(k, kind === '休業日' ? 'off' : (kind === '登校日' ? 'on' : 'reset'));
-      function conv(s){ s = (s || '').trim(); return s === '遅刻' ? 'late' : (s === '欠席' ? 'abs' : null); }
+      function conv(s){ s = (s || '').trim(); return { '遅刻':'late', '大遅刻':'vlate', '欠席':'abs' }[s] || null; }
       var a = conv(col[2]), b = conv(col[3]);
       delete S.rec[k];
       if(a || b){ S.rec[k] = {}; if(a) S.rec[k].a = a; if(b) S.rec[k].b = b; }
